@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import WineDetails from './components/WineDetails'
 import './App.css'
 
 function App() {
@@ -32,8 +30,20 @@ function App() {
 
       <div className="wine-list">
         {wines.map((wine) => (
-          <div key={wine.LWIN} className="wine-item">
-            <p>{wine.DISPLAY_NAME}</p>
+          <div key={wine.LWIN} className="wine-item border p-4 mb-4 rounded w-2/3 mx-auto bg-zinc-500">
+            <WineDetails
+              wineName={wine.DISPLAY_NAME}
+              vintage={wine.VINTAGE}
+              quantity={wine.QUANTITY}
+              size={wine.SIZE}
+              datePurchased={wine.DATE_PURCHASED}
+              purchasedFrom={wine.PURCHASED_FROM}
+              dateStored={wine.DATE_STORED}
+              storage={wine.STORAGE}
+              notes={wine.NOTES}
+              drinkBy={wine.DRINK_BY}
+              drinkStatus={wine.DRINK_STATUS}
+            />
           </div>
         ))}
       </div>
