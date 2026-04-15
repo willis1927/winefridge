@@ -9,7 +9,7 @@ function App() {
   async function search(e) {
     e.preventDefault()
     try {
-      const res = await fetch(`http://localhost:3000/wines?search=${searchTerm}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/wines?search=${searchTerm}`)
       const data = await res.json()
       setWines(data)
       console.log('Found wines:', data)
@@ -30,7 +30,7 @@ function App() {
 
       <div className="wine-list">
         {wines.map((wine) => (
-          <div key={wine.LWIN} className="wine-item border p-4 mb-4 rounded w-2/3 mx-auto bg-zinc-500">
+          <div key={wine.LWIN} className="wine-item">
             <WineDetails
               wineName={wine.DISPLAY_NAME}
               vintage={wine.VINTAGE}
