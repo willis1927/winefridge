@@ -41,6 +41,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.send('Welcome to the Wine Cellar API');
+});
+
 // GET all users
 app.get('/users', async (req, res) => {
   try {
