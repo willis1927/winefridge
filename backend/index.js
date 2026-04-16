@@ -42,7 +42,7 @@ app.use(cors({
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('Welcome to the Wine Cellar API');
+  res.send('Welcome to the Wine Cellar API!');
 });
 
 // GET all users
@@ -57,7 +57,7 @@ app.get('/users', async (req, res) => {
 
 //GET 1st 20 Wines 
 app.get('/wines', async (req, res) => {
-  const { search } = req.query;
+  const search = req.query.search ?? '';
   try {
     const [rows] = await db.query('SELECT * FROM lwin WHERE display_name LIKE ? and type = "Wine" LIMIT 20', [`%${search}%`]);
     res.json(rows);
