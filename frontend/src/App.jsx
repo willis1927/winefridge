@@ -9,7 +9,8 @@ function App() {
   async function search(e) {
     e.preventDefault()
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/wines?search=${searchTerm}`)
+      const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '')
+      const res = await fetch(`${baseUrl}/wines?search=${searchTerm}`)
       const data = await res.json()
       setWines(data)
       console.log('Found wines:', data)
@@ -20,34 +21,37 @@ function App() {
   }
 
   return (
-    <>
-      <h1>Wine Fridge</h1>
-      <form onSubmit={search}>
-         <input type="text" placeholder="Search for a wine..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-         <button type="submit">Search</button>
-      </form>
+    <div className="mx-auto w-3/4 p-4 border-solid border-2 border-gray-300 rounded-lg mt-10">
       
+      <div className='mx-autoflex flex flex-col align-middle mb-6'>
+        <h1 className=" mx-auto font-bold text-2xl mb-4">Wine Fridge</h1>
+        <form className="flex flex-col" onSubmit={search}>
+          <input className="text-center border p-2 rounded mr-2 mb-3  " type="text" placeholder="Search for a wine..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <button className="bg-red-950 text-white p-2 rounded" type="submit">Search</button>
+        </form>
+      </div>
 
-      <div className="wine-list">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ">
         {wines.map((wine) => (
-          <div key={wine.LWIN} className="wine-item">
+          <div key={wine.lwin}>
             <WineDetails
-              wineName={wine.DISPLAY_NAME}
-              vintage={wine.VINTAGE}
-              quantity={wine.QUANTITY}
-              size={wine.SIZE}
-              datePurchased={wine.DATE_PURCHASED}
-              purchasedFrom={wine.PURCHASED_FROM}
-              dateStored={wine.DATE_STORED}
-              storage={wine.STORAGE}
-              notes={wine.NOTES}
-              drinkBy={wine.DRINK_BY}
-              drinkStatus={wine.DRINK_STATUS}
+              wineName={wine.display_name}
+              producer={wine.producer_name}
+              wine={wine.wine}
+              colour={wine.colour}
+              type={wine.type}
+              subType={wine.sub_type}
+              country={wine.country}
+              region={wine.region}
+              subRegion={wine.sub_region}
+              firstVintage={wine.first_vintage}
+              finalVintage={wine.final_vintage}
+              status={wine.status}
             />
           </div>
         ))}
       </div>
-    </>
+    </div>
   )
 }
 
