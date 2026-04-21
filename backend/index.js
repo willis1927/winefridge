@@ -42,6 +42,7 @@ app.use(cors());
 //     return callback(new Error(`CORS blocked for origin: ${origin}`));
 //   }
 // }));
+
 app.use(express.json());
 
 app.get('/', (req, res) => {
