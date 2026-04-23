@@ -17,23 +17,79 @@ model User {
   @@map("users")
 }
 
-model Storage {
-  id       Int    @id @default(autoincrement())
-  name     String @db.VarChar(100)
-  capacity Int?
-  ownerId  String @map("owner_id") @db.Uuid
-  owner    User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  @@index([ownerId])
+model Lwin {
+  lwin           String       @id @db.VarChar(255)
+  status         String?      @db.VarChar(255)
+  displayName    String?      @map("display_name") @db.VarChar(255)
+  producerTitle  String?      @map("producer_title") @db.VarChar(255)
+  producerName   String?      @map("producer_name") @db.VarChar(255)
+  wine           String?      @db.VarChar(255)
+  country        String?      @db.VarChar(255)
+  region         String?      @db.VarChar(255)
+  subRegion      String?      @map("sub_region") @db.VarChar(255)
+  site           String?      @db.VarChar(255)
+  parcel         String?      @db.VarChar(255)
+  colour         String?      @db.VarChar(255)
+  type           String?      @db.VarChar(255)
+  subType        String?      @map("sub_type") @db.VarChar(255)
+  designation    String?      @db.VarChar(255)
+  classification String?      @db.VarChar(255)
+  vintageConfig  String?      @map("vintage_config") @db.VarChar(255)
+  firstVintage   String?      @map("first_vintage") @db.VarChar(255)
+  finalVintage   String?      @map("final_vintage") @db.VarChar(255)
+  dateAdded      DateTime     @default(now()) @map("date_added")
+  dateUpdated    DateTime     @updatedAt @map("date_updated")
+  reference      String?      @db.VarChar(255)
+  storedWines    StoredWine[]
+
+  @@map("lwin")
+}
+
+model Storage {
+  id          Int          @id @default(autoincrement())
+  name        String       @db.VarChar(100)
+  capacity    Int?
+  ownerId     String       @map("owner_id") @db.Uuid
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  storedWines StoredWine[]
+
+  @@index([ownerId], map: "idx_storage_owner")
   @@map("storage")
 }
 
-model StoredWine {
-  storedId Int     @id @default(autoincrement()) @map("storedID")
-  ownerId  String  @map("owner_id") @db.Uuid
-  notes    String?
-  owner    User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+model VintageInfo {
+  fullLwin          String       @id @map("full_lwin") @db.VarChar(255)
+  drinkByDate       DateTime?    @map("drink_by_date") @db.Date
+  currentDrinkState String?      @map("current_drink_state") @db.VarChar(255)
+  ratings           Float?
+  awards            String?      @db.VarChar(255)
+  notes             String?      @db.VarChar(255)
+  storedWines       StoredWine[]
 
-  @@index([ownerId])
+  @@map("vintage_info")
+}
+
+model StoredWine {
+  storedId      Int       @id @default(autoincrement()) @map("storedID")
+  ownerId       String    @map("owner_id") @db.Uuid
+  lwinCode      String    @map("lwin") @db.VarChar(255)
+  vintage       String?   @db.VarChar(4)
+  size          String?   @db.VarChar(5)
+  fullLwin      String?   @map("full_lwin") @db.VarChar(255)
+  datePurchased DateTime? @map("date_purchased") @db.Date
+  purchasedFrom String?   @map("purchased_from") @db.VarChar(255)
+  dateStored    DateTime? @map("date_stored") @db.Date
+  notes         String?   @db.VarChar(255)
+  storageId     Int?      @map("storage_id")
+
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  wineRef     Lwin         @relation(fields: [lwinCode], references: [lwin], onDelete: Cascade)
+  storage     Storage?     @relation(fields: [storageId], references: [id], onDelete: SetNull)
+  vintageInfo VintageInfo? @relation(fields: [fullLwin], references: [fullLwin], onDelete: SetNull)
+
+  @@index([ownerId], map: "idx_stored_wines_owner")
+  @@index([lwinCode], map: "idx_stored_wines_lwin")
+  @@index([storageId], map: "idx_stored_wines_storage")
   @@map("stored_wines")
 }

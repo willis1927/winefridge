@@ -1,8 +1,17 @@
 require('dotenv').config();
+const { Pool } = require("pg");
+const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+
 const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const app = express();
+
+const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 
 const allowedOrigins = new Set(
@@ -41,7 +50,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.get('/', (req, res) => {  res.send('Welcome to the Wine Cellar API!'); });
+app.get('/', async (req, res) => {  
+  let lwinCount = await prisma.lwin.count();
+  
+  res.send(`Welcome to the Wine Cellar API!, we currently have ${lwinCount} lwin${lwinCount !== 1 ? 's' : ''}`); });
 
 // GET all users
 app.get('/users', async (req, res) => {
