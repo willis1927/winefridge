@@ -3,9 +3,13 @@ const { Pool } = require("pg");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 
+const {createClient} = require('@supabase/supabase-js');
 const express = require('express');
 const cors = require('cors');
 const app = express();
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
 const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
@@ -46,33 +50,64 @@ app.use(cors({
   }
 }));
 app.use(express.json());
+async function requireAuth(req, res, next) {
+  const token = req.headers.authorization?.split('Bearer ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: 'Invalid token' });
+
+  req.user = user;
+  next();
+}
 
 app.get('/', async (req, res) => {  
   let lwinCount = await prisma.lwin.count();
   
   res.send(`Welcome to the Wine Cellar API!, we currently have ${lwinCount} lwin${lwinCount !== 1 ? 's' : ''}`); });
 
-// ===== USER ENDPOINTS =====
+// ===== AUTH ENDPOINTS =====
 
-// POST - create a user
-app.post('/users', async (req, res) => {
-  const { name, email } = req.body;
-  const id = crypto.randomUUID();
+app.post('/auth/sync', requireAuth, async (req, res) => {
+  const { id, email, user_metadata } = req.user;
   try {
-    const user = await prisma.user.create({
-      data:{
-        name : name,
-        email : email,  
-        id : id
+    const user = await prisma.user.upsert({
+      where: { id },
+      update: {},
+      create: {
+        id,
+        email,
+        name: user_metadata?.full_name ?? null
       }
-    })
-    
-    
-    res.json({ user });
+    });
+    res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+//update to force vetcel sync
+console.log("Backend server starting...");
+// ===== USER ENDPOINTS =====
+
+// POST - create a user
+// app.post('/users', async (req, res) => {
+//   const { name, email } = req.body;
+//   const id = uuid();
+//   try {
+//     const user = await prisma.user.create({
+//       data:{
+//         name : name,
+//         email : email,  
+//         id : id
+//       }
+//     })
+    
+    
+//     res.json({ user });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 // GET all users
 app.get('/users', async (req, res) => {
