@@ -6,7 +6,6 @@ const { PrismaPg } = require("@prisma/adapter-pg");
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const uuid = require('uuid').v4;
 const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
@@ -58,7 +57,7 @@ app.get('/', async (req, res) => {
 // POST - create a user
 app.post('/users', async (req, res) => {
   const { name, email } = req.body;
-  const id = uuid();
+  const id = crypto.randomUUID();
   try {
     const user = await prisma.user.create({
       data:{
