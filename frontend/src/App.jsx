@@ -1,15 +1,29 @@
 import { useState } from 'react'
 import WineDetails from './components/WineDetails'
 import './App.css'
+import { supabase } from './lib/supabase'
+import { useAuth } from './context/AuthContext'
+import { apiFetch } from './utils/api'
+
+
 
 function App() {
   const [searchTerm, setSearchTerm] = useState('')
   const [wines, setWines] = useState([])
+  const {user, session } = useAuth()
+  
+  
+  const signIn = () => supabase.auth.signInWithOAuth({ 
+    provider: 'google',
+    options: { redirectTo: window.location.origin }
+  })
 
-  async function search(e) {
+const signOut = () => supabase.auth.signOut()
+  
+async function search(e) {
     e.preventDefault()
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/wines?search=${searchTerm}`)
+      const res = await apiFetch(`/wines?search=${searchTerm}`)
       const data = await res.json()
       setWines(data)
       console.log('Found wines:', data)
@@ -20,7 +34,15 @@ function App() {
   }
 
   return (
-    <>
+      <>
+        {user ? (
+      <>
+        <span>{user.email}</span>
+        <button onClick={signOut}>Sign out</button>
+      </>
+      ) : (
+      <button onClick={signIn}>Sign in with Google</button>
+    )}
       <h1>Wine Fridge</h1>
       <form onSubmit={search}>
          <input type="text" placeholder="Search for a wine..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
