@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String       @id @db.Uuid
+  email       String       @unique @db.VarChar(255)
+  name        String?      @db.VarChar(100)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  storages    Storage[]
+  storedWines StoredWine[]
+
+  @@map("users")
+}
+
+model Storage {
+  id       Int    @id @default(autoincrement())
+  name     String @db.VarChar(100)
+  capacity Int?
+  ownerId  String @map("owner_id") @db.Uuid
+  owner    User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@map("storage")
+}
+
+model StoredWine {
+  storedId       Int      @id @default(autoincrement()) @map("storedID")
+  ownerId        String   @map("owner_id") @db.Uuid
+  lwin           String   @db.VarChar(255)
+  vintage        String   @db.VarChar(4)
+  size           String   @db.VarChar(5)
+  full_lwin      String   @db.VarChar(255)
+  date_purchased DateTime @db.Date
+  purchased_from String   @db.VarChar(255)
+  date_stored    DateTime @default(now()) @db.Date
+  notes          String?
+  storage_id     Int
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@map("stored_wines")
+}

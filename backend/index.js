@@ -1,84 +1,120 @@
 require('dotenv').config();
+const { Pool } = require("pg");
+const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+
 const express = require('express');
 const cors = require('cors');
-const db = require('./db');
 const app = express();
+const uuid = require('uuid').v4;
+const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
+const allowedOrigins = new Set(
+  [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ].filter(Boolean)
+);
 
-// Allow all origins (development only — comment out and restore below for production)
-app.use(cors());
+function isAllowedOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
 
-// const allowedOrigins = new Set(
-//   [
-//     process.env.FRONTEND_URL,
-//     'http://localhost:5173',
-//     'http://127.0.0.1:5173',
-//   ].filter(Boolean)
-// );
+  if (allowedOrigins.has(origin)) {
+    return true;
+  }
 
-// function isAllowedOrigin(origin) {
-//   if (!origin) {
-//     return true;
-//   }
-//
-//   if (allowedOrigins.has(origin)) {
-//     return true;
-//   }
-//
-//   try {
-//     const { protocol, hostname } = new URL(origin);
-//     return protocol === 'https:' && hostname.endsWith('.vercel.app');
-//   } catch {
-//     return false;
-//   }
-// }
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === 'https:' && hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
 
-// app.use(cors({
-//   origin(origin, callback) {
-//     if (isAllowedOrigin(origin)) {
-//       return callback(null, true);
-//     }
-//
-//     return callback(new Error(`CORS blocked for origin: ${origin}`));
-//   }
-// }));
+app.use(cors({
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) {
+      return callback(null, true);
+    }
 
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  }
+}));
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('Welcome to the Wine Cellar API!');
+app.get('/', async (req, res) => {  
+  let lwinCount = await prisma.lwin.count();
+  
+  res.send(`Welcome to the Wine Cellar API!, we currently have ${lwinCount} lwin${lwinCount !== 1 ? 's' : ''}`); });
+
+// ===== USER ENDPOINTS =====
+
+// POST - create a user
+app.post('/users', async (req, res) => {
+  const { name, email } = req.body;
+  const id = uuid();
+  try {
+    const user = await prisma.user.create({
+      data:{
+        name : name,
+        email : email,  
+        id : id
+      }
+    })
+    
+    
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET all users
 app.get('/users', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM users');
-    res.json(rows);
+    let users = await prisma.user.findMany();
+    console.log("Users",users);
+    res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-//GET 1st 20 Wines 
-app.get('/wines', async (req, res) => {
-  const search = req.query.search ?? '';
+// GET single user
+app.get('/users/:userId', async (req, res) => {
+  const { userId } = req.params;
   try {
-    const [rows] = await db.query('SELECT * FROM lwin WHERE display_name LIKE ? and type = "Wine" LIMIT 20', [`%${search}%`]);
-    res.json(rows);
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST - create a user
-app.post('/users', async (req, res) => {
+// PUT - update user
+app.put('/users/:userId', async (req, res) => {
+  const { userId } = req.params;
   const { name, email } = req.body;
   try {
-    const [result] = await db.query(
-      'INSERT INTO users (name, email) VALUES (?, ?)',
-      [name, email]
-    );
-    res.json({ id: result.insertId, name, email });
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(name && { name }),
+        ...(email && { email })
+      }
+    });
+    res.json(updatedUser);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -86,26 +122,42 @@ app.post('/users', async (req, res) => {
 
 // ===== STORAGE ENDPOINTS =====
 
-// GET all storage locations for a user
-app.get('/storage/:userId', async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const [rows] = await db.query('SELECT * FROM storage WHERE owner_id = ?', [userId]);
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // POST - create a storage location
 app.post('/storage', async (req, res) => {
   const { name, capacity, owner_id } = req.body;
   try {
-    const [result] = await db.query(
-      'INSERT INTO storage (name, capacity, owner_id) VALUES (?, ?, ?)',
-      [name, capacity, owner_id]
-    );
-    res.json({ id: result.insertId, name, capacity, owner_id });
+    const result = await prisma.storage.create({
+      data: {
+        name,
+        capacity,
+        owner: {
+          connect: { id: owner_id }
+        }
+      }
+    });
+    res.json({ id: result.id, name: result.name, capacity: result.capacity, owner_id: result.ownerId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+})
+
+// GET all storage locations for a user
+app.get('/storage/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const storageRows = await prisma.storage.findMany({
+      where: { ownerId: userId },
+      orderBy: { id: 'asc' }
+    });
+
+    const rows = storageRows.map((storage) => ({
+      id: storage.id,
+      name: storage.name,
+      capacity: storage.capacity,
+      owner_id: storage.ownerId
+    }));
+
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -115,8 +167,20 @@ app.post('/storage', async (req, res) => {
 app.put('/storage/:storageId', async (req, res) => {
   const { storageId } = req.params;
   const { name, capacity } = req.body;
+  const parsedStorageId = Number(storageId);
+
+  if (!Number.isInteger(parsedStorageId)) {
+    return res.status(400).json({ error: 'Invalid storageId' });
+  }
+
   try {
-    await db.query('UPDATE storage SET name = ?, capacity = ? WHERE id = ?', [name, capacity, storageId]);
+    await prisma.storage.update({
+      where: { id: parsedStorageId },
+      data: {
+        name,
+        capacity
+      }
+    });
     res.json({ message: 'Storage updated' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -126,9 +190,66 @@ app.put('/storage/:storageId', async (req, res) => {
 // DELETE storage location
 app.delete('/storage/:storageId', async (req, res) => {
   const { storageId } = req.params;
+  const parsedStorageId = Number(storageId);
+
+  if (!Number.isInteger(parsedStorageId)) {
+    return res.status(400).json({ error: 'Invalid storageId' });
+  }
+
   try {
-    await db.query('DELETE FROM storage WHERE id = ?', [storageId]);
+    await prisma.storage.delete({
+      where: { id: parsedStorageId }
+    });
     res.json({ message: 'Storage deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== WINE ENDPOINTS =====
+
+//GET 1st 20 Wines 
+app.get('/wines', async (req, res) => {
+  const { search } = req.query;
+  try {
+
+    const wines = await prisma.lwin.findMany({
+      take: 20,
+    });
+    
+    res.json(wines);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Wine search endpoint
+app.get('/wines/search', async (req, res) => {
+  const name =  req.query.name ?? '';
+  const trimmedName = typeof name === 'string' ? name.trim() : '';
+
+  if (!trimmedName) {
+    return res.json([]);
+  }
+
+  try {
+    const wines = await prisma.lwin.findMany({
+      where: {
+        displayName: {
+          contains: trimmedName,
+          mode: 'insensitive'
+        }
+      },
+      orderBy: { displayName: 'asc' },
+      take: 20
+    });
+    res.json(wines.map(wine => ({
+      lwin: wine.lwin,
+      display_name: wine.displayName,
+      region: wine.region,
+      producerName: wine.producerName
+      
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -138,156 +259,49 @@ app.delete('/storage/:storageId', async (req, res) => {
 
 // GET all stored wines for a user
 app.get('/stored-wines/:userId', async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const [rows] = await db.query(`
-      SELECT 
-        sw.storedID,
-        sw.owner_id,
-        sw.lwin,
-        sw.vintage,
-        sw.size,
-        sw.full_lwin,
-        sw.date_purchased,
-        sw.purchased_from,
-        sw.date_stored,
-        sw.notes,
-        sw.storage_id,
-        l.display_name,
-        s.name as storage_name,
-        vi.current_drink_state,
-        vi.drink_by_date
-      FROM stored_wines sw
-      LEFT JOIN lwin l ON sw.lwin = l.lwin
-      LEFT JOIN storage s ON sw.storage_id = s.id
-      LEFT JOIN vintage_info vi ON sw.full_lwin = vi.full_lwin
-      WHERE sw.owner_id = ?
-      ORDER BY sw.date_stored DESC
-    `, [userId]);
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // GET single stored wine
 app.get('/stored-wines/detail/:storedId', async (req, res) => {
-  const { storedId } = req.params;
-  try {
-    const [rows] = await db.query(`
-      SELECT 
-        sw.*,
-        l.display_name,
-        s.name as storage_name,
-        vi.current_drink_state,
-        vi.drink_by_date,
-        vi.ratings,
-        vi.awards
-      FROM stored_wines sw
-      LEFT JOIN lwin l ON sw.lwin = l.lwin
-      LEFT JOIN storage s ON sw.storage_id = s.id
-      LEFT JOIN vintage_info vi ON sw.full_lwin = vi.full_lwin
-      WHERE sw.storedID = ?
-    `, [storedId]);
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // POST - add wine to collection
 app.post('/stored-wines', async (req, res) => {
-  const { owner_id, lwin, vintage, size, date_purchased, purchased_from, date_stored, storage_id, notes } = req.body;
-  const full_lwin = `${lwin}${vintage}${size}`;
-  try {
-    const [result] = await db.query(
-      'INSERT INTO stored_wines (owner_id, lwin, vintage, size, full_lwin, date_purchased, purchased_from, date_stored, storage_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [owner_id, lwin, vintage, size, full_lwin, date_purchased, purchased_from, date_stored, storage_id, notes]
-    );
-    res.json({ storedID: result.insertId, full_lwin });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // PUT - update stored wine
 app.put('/stored-wines/:storedId', async (req, res) => {
-  const { storedId } = req.params;
-  const { date_purchased, purchased_from, storage_id, notes, vintage, size, lwin } = req.body;
-  const full_lwin = `${lwin}${vintage}${size}`;
-  try {
-    await db.query(
-      'UPDATE stored_wines SET date_purchased = ?, purchased_from = ?, storage_id = ?, notes = ?, full_lwin = ? WHERE storedID = ?',
-      [date_purchased, purchased_from, storage_id, notes, full_lwin, storedId]
-    );
-    res.json({ message: 'Stored wine updated' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // DELETE stored wine
 app.delete('/stored-wines/:storedId', async (req, res) => {
-  const { storedId } = req.params;
-  try {
-    await db.query('DELETE FROM stored_wines WHERE storedID = ?', [storedId]);
-    res.json({ message: 'Stored wine deleted' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // ===== VINTAGE INFO ENDPOINTS =====
 
 // GET vintage info
 app.get('/vintage-info/:fullLwin', async (req, res) => {
-  const { fullLwin } = req.params;
-  try {
-    const [rows] = await db.query('SELECT * FROM vintage_info WHERE full_lwin = ?', [fullLwin]);
-    res.json(rows[0] || null);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // POST - add/create vintage info
 app.post('/vintage-info', async (req, res) => {
-  const { full_lwin, drink_by_date, current_drink_state, ratings, awards, notes } = req.body;
-  try {
-    await db.query(
-      'INSERT INTO vintage_info (full_lwin, drink_by_date, current_drink_state, ratings, awards, notes) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE drink_by_date = ?, current_drink_state = ?, ratings = ?, awards = ?, notes = ?',
-      [full_lwin, drink_by_date, current_drink_state, ratings, awards, notes, drink_by_date, current_drink_state, ratings, awards, notes]
-    );
-    res.json({ full_lwin, drink_by_date, current_drink_state, ratings, awards, notes });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // PUT - update vintage info
 app.put('/vintage-info/:fullLwin', async (req, res) => {
-  const { fullLwin } = req.params;
-  const { drink_by_date, current_drink_state, ratings, awards, notes } = req.body;
-  try {
-    await db.query(
-      'UPDATE vintage_info SET drink_by_date = ?, current_drink_state = ?, ratings = ?, awards = ?, notes = ? WHERE full_lwin = ?',
-      [drink_by_date, current_drink_state, ratings, awards, notes, fullLwin]
-    );
-    res.json({ message: 'Vintage info updated' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 // DELETE vintage info
 app.delete('/vintage-info/:fullLwin', async (req, res) => {
-  const { fullLwin } = req.params;
-  try {
-    await db.query('DELETE FROM vintage_info WHERE full_lwin = ?', [fullLwin]);
-    res.json({ message: 'Vintage info deleted' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(501).json({ error: 'Not implemented' });
 });
 
 if (require.main === module) {
