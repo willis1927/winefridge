@@ -40,15 +40,17 @@ function isAllowedOrigin(origin) {
   }
 }
 
-app.use(cors({
+const corsOptions = {
   origin(origin, callback) {
     if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
-
     return callback(new Error(`CORS blocked for origin: ${origin}`));
   }
-}));
+};
+
+app.options('*', cors(corsOptions));
+app.use(cors(corsOptions));
 app.use(express.json());
 async function requireAuth(req, res, next) {
   const token = req.headers.authorization?.split('Bearer ')[1];
@@ -175,6 +177,17 @@ app.post('/storage', async (req, res) => {
   }
 })
 
+// GET all storage locations
+app.get('/storage', async (req, res) => {
+  try {
+    let storageLocations = await prisma.storage.findMany();
+    res.json(storageLocations); 
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET all storage locations for a user
 app.get('/storage/:userId', async (req, res) => {
   const { userId } = req.params;
@@ -261,7 +274,7 @@ app.get('/wines', async (req, res) => {
 app.get('/wines/search', async (req, res) => {
   const name =  req.query.name ?? '';
   const trimmedName = typeof name === 'string' ? name.trim() : '';
-
+  console.log(`Searching for wines with name containing: "${trimmedName}"`);
   if (!trimmedName) {
     return res.json([]);
   }
@@ -281,8 +294,9 @@ app.get('/wines/search', async (req, res) => {
       lwin: wine.lwin,
       display_name: wine.displayName,
       region: wine.region,
-      producerName: wine.producerName
-      
+      producerName: wine.producerName,
+      firstVintage: wine.firstVintage,
+      finalVintage: wine.finalVintage
     })));
   } catch (err) {
     res.status(500).json({ error: err.message });
