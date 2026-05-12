@@ -4,7 +4,7 @@ import { AuthProvider } from './context/AuthContext'
 
 import './index.css'
 import App from './App retired.jsx'
-import App2 from './App.jsx'
+import App from './App.jsx'
 
 console.log('main.jsx running')
 
