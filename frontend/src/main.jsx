@@ -4,14 +4,14 @@ import { AuthProvider } from './context/AuthContext'
 
 import './index.css'
 import App from './App retired.jsx'
-import App2 from './App2.jsx'
+import App2 from './App.jsx'
 
 console.log('main.jsx running')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
    <AuthProvider>
-    <App2 />
+    <App />
   </AuthProvider>
     
   </StrictMode>,
