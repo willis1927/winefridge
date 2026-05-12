@@ -52,7 +52,7 @@ const LIGHT = {
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 
-function App2() {
+function App() {
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const t = dark ? DARK : LIGHT
 
@@ -115,28 +115,30 @@ function App2() {
   const selectClass = `${t.input} rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition appearance-none`
 
   return (
-    <ThemeCtx.Provider value={{ t }}>
-      <div className={`min-h-screen ${t.page} flex items-start justify-center py-14 px-4 transition-colors duration-300`}>
-        <div className="w-full max-w-2xl">
+   <ThemeCtx.Provider value={{ t }}>
+  <div className={`min-h-screen ${t.page} flex items-start justify-center py-14 px-4 transition-colors duration-300`}>
+    {/* Theme toggle — fixed top-right, clear of all content */}
+    <button
+      type="button"
+      onClick={() => setDark((d) => !d)}
+      className={`fixed top-4 right-4 z-50 rounded-lg p-2 transition-colors duration-200 ${t.toggleBtn}`}
+      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {dark ? <SunIcon /> : <MoonIcon />}
+    </button>
 
-          {/* Header */}
-          <div className="mb-10 text-center relative">
-            <button
-              type="button"
-              onClick={() => setDark((d) => !d)}
-              className={`absolute right-0 top-0 rounded-lg p-2 transition-colors duration-200 ${t.toggleBtn}`}
-              aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {dark ? <SunIcon /> : <MoonIcon />}
-            </button>
-            <h1 className={`text-4xl font-serif font-light tracking-widest ${t.title} uppercase transition-colors duration-300`}>
-              Wine Fridge
-            </h1>
-            <p className={`mt-2 text-sm tracking-widest ${t.subtitle} uppercase transition-colors duration-300`}>
-              Add a bottle to your cellar
-            </p>
-            <div className={`mt-4 mx-auto w-16 border-t ${t.accentBar} transition-colors duration-300`} />
-          </div>
+    <div className="w-full max-w-2xl">
+
+      {/* Header */}
+      <div className="mb-10 text-center">
+        <h1 className={`text-4xl font-serif font-light tracking-widest ${t.title} uppercase transition-colors duration-300`}>
+          Wine Fridge
+        </h1>
+        <p className={`mt-2 text-sm tracking-widest ${t.subtitle} uppercase transition-colors duration-300`}>
+          Add a bottle to your cellar
+        </p>
+        <div className={`mt-4 mx-auto w-16 border-t ${t.accentBar} transition-colors duration-300`} />
+      </div>
 
           {/* Card */}
           <form
@@ -421,4 +423,4 @@ function MoonIcon() {
   )
 }
 
-export default App2
+export default App
