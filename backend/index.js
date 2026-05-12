@@ -174,6 +174,16 @@ app.post('/storage', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 })
+//Get all storage locations
+app.get('/storage', async (req, res) => {
+  try {
+    let storage = await prisma.storage.findMany();
+    console.log("Storage",storage);
+    res.json(storage);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET all storage locations for a user
 app.get('/storage/:userId', async (req, res) => {
@@ -275,14 +285,17 @@ app.get('/wines/search', async (req, res) => {
         }
       },
       orderBy: { displayName: 'asc' },
-      take: 20
+      take: 50
     });
     res.json(wines.map(wine => ({
       lwin: wine.lwin,
       display_name: wine.displayName,
+      producer_name: wine.producerName,
+      country: wine.country,
       region: wine.region,
-      producerName: wine.producerName
-      
+      sub_region: wine.subRegion,
+      colour: wine.colour,
+      classification: wine.classification,
     })));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -295,6 +308,7 @@ app.get('/wines/search', async (req, res) => {
 app.get('/stored-wines/:userId', async (req, res) => {
   res.status(501).json({ error: 'Not implemented' });
 });
+
 
 // GET single stored wine
 app.get('/stored-wines/detail/:storedId', async (req, res) => {
