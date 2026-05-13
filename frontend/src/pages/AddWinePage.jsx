@@ -1,8 +1,37 @@
 import { useState, useRef, useCallback, useEffect, createContext, useContext } from 'react'
-import { apiFetch } from './utils/api'
+import { Link } from 'react-router-dom'
+import { apiFetch } from '../utils/api'
 
 const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Dessert', 'Fortified']
-const SIZES = ['187.5ml', '375ml', '500ml', '750ml', '1L', '1.5L (Magnum)', '3L (Double Magnum)', '6L (Imperial)']
+
+const initialForm = () => ({
+  lwin: '',
+  wineName: '',
+  owner: '',
+  region: '',
+  subRegion: '',
+  country: '',
+  vintage: '',
+  producer: '',
+  classification: '',
+  colour: '',
+  size: 750,
+  quantity: '1',
+  storageLocation: '',
+  purchasedFrom: '',
+  purchasedDate: '',
+  storedDate: new Date().toISOString().split('T')[0],
+})
+const SIZES = [
+  { label: '187.5ml (Split)',         ml: 187.5 },
+  { label: '375ml (Half)',            ml: 375   },
+  { label: '500ml',                   ml: 500   },
+  { label: '750ml (Standard)',        ml: 750   },
+  { label: '1000ml (1L)',             ml: 1000  },
+  { label: '1500ml (Magnum)',         ml: 1500  },
+  { label: '3000ml (Double Magnum)', ml: 3000  },
+  { label: '6000ml (Imperial)',       ml: 6000  },
+]
 const VINTAGES = ['NV', ...Array.from({ length: new Date().getFullYear() - 1979 }, (_, i) => String(new Date().getFullYear() - i))]
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
@@ -11,49 +40,49 @@ const ThemeCtx = createContext(null)
 const useTheme = () => useContext(ThemeCtx)
 
 const DARK = {
-  page: 'bg-stone-950',
-  card: 'bg-stone-900 border border-stone-700',
-  input: 'bg-stone-800 border border-stone-600 text-stone-100 placeholder-stone-500 focus:ring-amber-600',
-  label: 'text-stone-400',
+  page: 'bg-gradient-to-br from-slate-900 to-amber-950',
+  card: 'bg-slate-800 border border-slate-700',
+  input: 'bg-slate-700 border border-slate-600 text-slate-100 placeholder-slate-500 focus:ring-amber-600',
+  label: 'text-slate-400',
   title: 'text-amber-100',
-  subtitle: 'text-stone-400',
-  sectionHead: 'text-amber-600',
-  divider: 'border-stone-700',
-  listBg: 'bg-stone-800 border border-stone-600',
-  listItem: 'text-stone-100',
-  listSub: 'text-stone-400',
-  listActive: 'bg-stone-600',
-  listHover: 'hover:bg-stone-700',
-  clearBtn: 'text-stone-400 hover:text-stone-100',
+  subtitle: 'text-slate-400',
+  sectionHead: 'text-amber-500',
+  divider: 'border-slate-700',
+  listBg: 'bg-slate-700 border border-slate-600',
+  listItem: 'text-slate-100',
+  listSub: 'text-slate-400',
+  listActive: 'bg-slate-600',
+  listHover: 'hover:bg-slate-600',
+  clearBtn: 'text-slate-400 hover:text-slate-100',
   accentBar: 'border-amber-700',
-  toggleBtn: 'bg-stone-800 border border-stone-600 text-stone-300 hover:text-amber-400 hover:border-amber-600',
+  toggleBtn: 'bg-slate-700 border border-slate-600 text-slate-300 hover:text-amber-400 hover:border-amber-600',
   submitShadow: 'shadow-amber-900/40',
 }
 
 const LIGHT = {
-  page: 'bg-amber-50',
-  card: 'bg-white border border-stone-200',
-  input: 'bg-white border border-stone-300 text-stone-800 placeholder-stone-400 focus:ring-amber-500',
-  label: 'text-stone-500',
-  title: 'text-stone-800',
-  subtitle: 'text-stone-500',
-  sectionHead: 'text-amber-700',
-  divider: 'border-stone-200',
-  listBg: 'bg-white border border-stone-200',
-  listItem: 'text-stone-800',
-  listSub: 'text-stone-500',
-  listActive: 'bg-amber-100',
-  listHover: 'hover:bg-stone-100',
-  clearBtn: 'text-stone-400 hover:text-stone-700',
-  accentBar: 'border-amber-600',
-  toggleBtn: 'bg-white border border-stone-300 text-stone-500 hover:text-amber-700 hover:border-amber-500',
-  submitShadow: 'shadow-amber-700/30',
+  page: 'bg-gradient-to-br from-slate-200 to-amber-100',
+  card: 'bg-slate-50 border border-slate-200',
+  input: 'bg-slate-100 border border-slate-300 text-slate-700 placeholder-slate-400 focus:ring-amber-500',
+  label: 'text-slate-500',
+  title: 'text-slate-700',
+  subtitle: 'text-slate-500',
+  sectionHead: 'text-amber-600',
+  divider: 'border-slate-200',
+  listBg: 'bg-slate-50 border border-slate-200',
+  listItem: 'text-slate-700',
+  listSub: 'text-slate-500',
+  listActive: 'bg-slate-200',
+  listHover: 'hover:bg-slate-100',
+  clearBtn: 'text-slate-400 hover:text-slate-600',
+  accentBar: 'border-amber-500',
+  toggleBtn: 'bg-slate-50 border border-slate-300 text-slate-500 hover:text-amber-600 hover:border-amber-400',
+  submitShadow: 'shadow-amber-600/20',
 }
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 
-function App() {
-  const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+function AddWinePage() {
+  const [dark, setDark] = useState(true)
   const t = dark ? DARK : LIGHT
 
   const [storageLocations, setStorageLocations] = useState([])
@@ -70,33 +99,21 @@ function App() {
       .catch((err) => console.error('Users fetch error:', err))
   }, [])
 
-  const [form, setForm] = useState({
-    lwin: '',
-    wineName: '',
-    owner: '',
-    region: '',
-    subRegion: '',
-    country: '',
-    vintage: '',
-    producer: '',
-    classification: '',
-    colour: '',
-    size: '750ml',
-    quantity: '1',
-    storageLocation: '',
-    purchasedFrom: '',
-    purchasedDate: '',
-  })
+  const [submitting, setSubmitting] = useState(false)
+  const [submitMsg, setSubmitMsg] = useState(null)
+
+  const [form, setForm] = useState(initialForm)
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
   }
 
   const handleWineSelect = (wine) => {
     setForm((prev) => ({
       ...prev,
       wineName: wine.display_name ?? prev.wineName,
-      lwin: wine.lwin ?? prev.lwin,
+      lwin: wine.lwin ?? '',  // null lwin means custom wine — clear any previously selected LWIN
       producer: wine.producer_name ?? prev.producer,
       country: wine.country ?? prev.country,
       region: wine.region ?? prev.region,
@@ -106,10 +123,75 @@ function App() {
     }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Adding to storage:', form)
-    // TODO: wire up to API
+    setSubmitMsg(null)
+
+    if (!form.wineName.trim()) {
+      setSubmitMsg({ type: 'error', text: 'Wine name is required' })
+      return
+    }
+    if (!form.owner) {
+      setSubmitMsg({ type: 'error', text: 'Please select an owner' })
+      return
+    }
+    const qty = parseInt(form.quantity, 10)
+    if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+      setSubmitMsg({ type: 'error', text: 'Quantity must be between 1 and 100' })
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      let lwinCode = form.lwin
+
+      if (!lwinCode) {
+        const customRes = await apiFetch('/wines/custom', {
+          method: 'POST',
+          body: JSON.stringify({
+            display_name: form.wineName,
+            producer_name: form.producer || undefined,
+            country: form.country || undefined,
+            region: form.region || undefined,
+            sub_region: form.subRegion || undefined,
+            colour: form.colour || undefined,
+            classification: form.classification || undefined,
+          })
+        })
+        if (!customRes.ok) {
+          const err = await customRes.json()
+          throw new Error(err.error || 'Failed to create custom wine')
+        }
+        const newWine = await customRes.json()
+        lwinCode = newWine.lwin
+      }
+
+      const storeRes = await apiFetch('/stored-wines', {
+        method: 'POST',
+        body: JSON.stringify({
+          owner_id: form.owner,
+          lwin: lwinCode,
+          vintage: form.vintage || undefined,
+          size: form.size || undefined,
+          storage_id: form.storageLocation || undefined,
+          purchased_from: form.purchasedFrom || undefined,
+          date_purchased: form.purchasedDate || undefined,
+          date_stored: form.storedDate || undefined,
+          quantity: qty,
+        })
+      })
+      if (!storeRes.ok) {
+        const err = await storeRes.json()
+        throw new Error(err.error || 'Failed to add wine to storage')
+      }
+      setSubmitMsg({ type: 'success', text: 'Wine added to your cellar!' })
+      setTimeout(() => setSubmitMsg(null), 5000)
+      setForm(initialForm())
+    } catch (err) {
+      setSubmitMsg({ type: 'error', text: err.message })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const selectClass = `${t.input} rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition appearance-none`
@@ -140,9 +222,16 @@ function App() {
         <div className={`mt-4 mx-auto w-16 border-t ${t.accentBar} transition-colors duration-300`} />
       </div>
 
+      <div className="flex justify-end mb-6">
+        <Link to="/cellar" className={`text-sm tracking-widest uppercase transition-colors ${t.sectionHead} opacity-70 hover:opacity-100`}>
+          ← My Cellar
+        </Link>
+      </div>
+
           {/* Card */}
           <form
             onSubmit={handleSubmit}
+            autoComplete="off"
             className={`${t.card} rounded-2xl shadow-2xl p-8 space-y-8 transition-colors duration-300`}
           >
             {/* Section: Wine Identity */}
@@ -203,7 +292,7 @@ function App() {
                   <label className={`text-xs tracking-widest ${t.label} uppercase transition-colors duration-300`}>Size</label>
                   <select name="size" value={form.size} onChange={handleChange} className={selectClass}>
                     <option value="">Select size…</option>
-                    {SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {SIZES.map((s) => <option key={s.ml} value={s.ml}>{s.label}</option>)}
                   </select>
                 </div>
 
@@ -229,6 +318,7 @@ function App() {
 
                 <Field label="Purchased From" name="purchasedFrom" value={form.purchasedFrom} onChange={handleChange} placeholder="e.g. Berry Bros. & Rudd" />
                 <Field label="Purchase Date" name="purchasedDate" value={form.purchasedDate} onChange={handleChange} type="date" />
+                <Field label="Stored Date" name="storedDate" value={form.storedDate} onChange={handleChange} type="date" />
 
                 {/* TODO: remove when auth is implemented */}
                 <div className="flex flex-col gap-1">
@@ -244,11 +334,17 @@ function App() {
             </section>
 
             {/* Submit */}
+            {submitMsg && (
+              <p className={`text-sm text-center ${submitMsg.type === 'success' ? 'text-green-500' : 'text-red-400'}`}>
+                {submitMsg.text}
+              </p>
+            )}
             <button
               type="submit"
-              className={`w-full mt-2 py-3 rounded-xl bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white font-semibold tracking-widest uppercase text-sm transition-colors duration-200 shadow-lg ${t.submitShadow}`}
+              disabled={submitting}
+              className={`w-full mt-2 py-3 rounded-xl bg-amber-700 hover:bg-amber-600 active:bg-amber-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold tracking-widest uppercase text-sm transition-colors duration-200 shadow-lg ${t.submitShadow}`}
             >
-              Add to Storage
+              {submitting ? 'Adding…' : 'Add to Storage'}
             </button>
           </form>
 
@@ -275,9 +371,10 @@ function WineAutocomplete({ value, onChange, onSelect }) {
       const data = await res.json()
       setSuggestions(data)
       setActiveIndex(-1)
-      setOpen(data.length > 0)
+      setOpen(true)
     } catch {
       setSuggestions([])
+      setOpen(true)
     }
   }, [])
 
@@ -300,7 +397,7 @@ function WineAutocomplete({ value, onChange, onSelect }) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setActiveIndex((i) => {
-        const next = Math.min(i + 1, suggestions.length - 1)
+        const next = Math.min(i + 1, suggestions.length) // suggestions.length = index of custom option
         scrollIntoView(next)
         return next
       })
@@ -313,7 +410,11 @@ function WineAutocomplete({ value, onChange, onSelect }) {
       })
     } else if (e.key === 'Enter' && activeIndex >= 0) {
       e.preventDefault()
-      handlePick(suggestions[activeIndex])
+      if (activeIndex === suggestions.length) {
+        handlePick({ lwin: null, display_name: value })
+      } else {
+        handlePick(suggestions[activeIndex])
+      }
     } else if (e.key === 'Escape') {
       setOpen(false)
       setActiveIndex(-1)
@@ -337,7 +438,7 @@ function WineAutocomplete({ value, onChange, onSelect }) {
             value={value}
             onChange={handleInput}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
-            onFocus={() => suggestions.length > 0 && setOpen(true)}
+            onFocus={() => (suggestions.length > 0 || value.trim()) && setOpen(true)}
             onKeyDown={handleKeyDown}
             placeholder="e.g. Château Margaux"
             autoComplete="off"
@@ -371,6 +472,13 @@ function WineAutocomplete({ value, onChange, onSelect }) {
               )}
             </li>
           ))}
+          <li
+            onMouseDown={() => handlePick({ lwin: null, display_name: value })}
+            className={`flex items-center gap-2 px-4 py-2.5 cursor-pointer transition-colors ${suggestions.length > 0 ? `border-t ${t.divider}` : ''} ${suggestions.length === activeIndex ? t.listActive : t.listHover}`}
+          >
+            <span className={`text-sm font-bold ${t.sectionHead}`}>✚</span>
+            <span className={`text-sm ${t.listItem}`}>Add "{value}" as custom wine</span>
+          </li>
         </ul>
       )}
     </div>
@@ -388,6 +496,7 @@ function Field({ label, name, value, onChange, placeholder = '', type = 'text', 
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        autoComplete="new-password"
         className={`${t.input} rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition`}
       />
     </div>
@@ -423,4 +532,4 @@ function MoonIcon() {
   )
 }
 
-export default App
+export default AddWinePage

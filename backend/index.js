@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { randomUUID } = require('crypto');
 const { Pool } = require("pg");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
@@ -302,7 +303,73 @@ app.get('/wines/search', async (req, res) => {
   }
 });
 
+// POST - create a user-defined wine
+// Uses Option 1: insert into lwin table with USR_ prefix and status='user_defined'
+// TODO Option 3: replace body of this handler to write to a dedicated wines table instead
+app.post('/wines/custom', async (req, res) => {
+  const { display_name, producer_name, country, region, sub_region, colour, classification } = req.body;
+
+  if (!display_name?.trim()) {
+    return res.status(400).json({ error: 'display_name is required' });
+  }
+
+  const lwin = `USR_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+
+  try {
+    const wine = await prisma.lwin.create({
+      data: {
+        lwin,
+        status: 'user_defined',
+        displayName: display_name.trim(),
+        producerName: producer_name?.trim() ?? null,
+        country: country?.trim() ?? null,
+        region: region?.trim() ?? null,
+        subRegion: sub_region?.trim() ?? null,
+        colour: colour?.trim() ?? null,
+        classification: classification?.trim() ?? null,
+      }
+    });
+    res.status(201).json({
+      lwin: wine.lwin,
+      display_name: wine.displayName,
+      producer_name: wine.producerName,
+      country: wine.country,
+      region: wine.region,
+      sub_region: wine.subRegion,
+      colour: wine.colour,
+      classification: wine.classification,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ===== STORED WINES ENDPOINTS =====
+
+// GET all stored wines (temporary — no auth filter yet)
+app.get('/stored-wines', async (req, res) => {
+  try {
+    const wines = await prisma.storedWine.findMany({
+      include: {
+        wineRef: {
+          select: {
+            displayName: true,
+            producerName: true,
+            country: true,
+            region: true,
+            colour: true,
+          }
+        },
+        storage: { select: { name: true } },
+        owner:   { select: { name: true, email: true } },
+      },
+      orderBy: { dateStored: 'desc' },
+    });
+    res.json(wines);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET all stored wines for a user
 app.get('/stored-wines/:userId', async (req, res) => {
@@ -316,13 +383,97 @@ app.get('/stored-wines/detail/:storedId', async (req, res) => {
 });
 
 // POST - add wine to collection
+// quantity > 1 creates multiple rows (one per bottle) — no quantity column in schema
 app.post('/stored-wines', async (req, res) => {
-  res.status(501).json({ error: 'Not implemented' });
+  const { owner_id, lwin, vintage, size, storage_id, purchased_from, date_purchased, date_stored, quantity, notes } = req.body;
+
+  if (!owner_id || !lwin) {
+    return res.status(400).json({ error: 'owner_id and lwin are required' });
+  }
+
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(owner_id)) {
+    return res.status(400).json({ error: 'invalid owner_id' });
+  }
+
+  const count = parseInt(quantity, 10);
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    return res.status(400).json({ error: 'quantity must be between 1 and 100' });
+  }
+
+  const sizeML = (size != null && size !== '') ? parseFloat(size) : null;
+  if (sizeML !== null && (isNaN(sizeML) || sizeML <= 0)) {
+    return res.status(400).json({ error: 'size must be a positive number in ml' });
+  }
+
+  const parsedStorageId = storage_id ? parseInt(storage_id, 10) : null;
+  if (storage_id && (!Number.isInteger(parsedStorageId) || parsedStorageId <= 0)) {
+    return res.status(400).json({ error: 'invalid storage_id' });
+  }
+
+  try {
+    const rows = [];
+    for (let i = 0; i < count; i++) {
+      const row = await prisma.storedWine.create({
+        data: {
+          ownerId: owner_id,
+          lwinCode: lwin,
+          vintage: vintage || null,
+          size: sizeML,
+          storageId: parsedStorageId,
+          purchasedFrom: purchased_from || null,
+          datePurchased: date_purchased ? new Date(date_purchased) : null,
+          dateStored: date_stored ? new Date(date_stored) : null,
+          notes: notes || null,
+        }
+      });
+      rows.push(row);
+    }
+    res.status(201).json(rows.length === 1 ? rows[0] : rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT - update stored wine
 app.put('/stored-wines/:storedId', async (req, res) => {
-  res.status(501).json({ error: 'Not implemented' });
+  const storedId = parseInt(req.params.storedId, 10);
+  if (!Number.isInteger(storedId) || storedId <= 0) {
+    return res.status(400).json({ error: 'invalid storedId' });
+  }
+
+  const { vintage, size, storage_id, date_stored } = req.body;
+
+  const sizeML = (size != null && size !== '') ? parseFloat(size) : null;
+  if (sizeML !== null && (isNaN(sizeML) || sizeML <= 0)) {
+    return res.status(400).json({ error: 'size must be a positive number in ml' });
+  }
+
+  const parsedStorageId = storage_id ? parseInt(storage_id, 10) : null;
+  if (storage_id && (!Number.isInteger(parsedStorageId) || parsedStorageId <= 0)) {
+    return res.status(400).json({ error: 'invalid storage_id' });
+  }
+
+  try {
+    const updated = await prisma.storedWine.update({
+      where: { storedId },
+      data: {
+        vintage: vintage || null,
+        size: sizeML,
+        storageId: parsedStorageId,
+        dateStored: date_stored ? new Date(date_stored) : null,
+      },
+      include: {
+        wineRef: { select: { displayName: true, producerName: true, country: true, region: true, colour: true } },
+        storage: { select: { name: true } },
+        owner:   { select: { name: true, email: true } },
+      },
+    });
+    res.json(updated);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Stored wine not found' });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE stored wine
