@@ -348,8 +348,10 @@ app.post('/wines/custom', async (req, res) => {
 
 // GET all stored wines (temporary — no auth filter yet)
 app.get('/stored-wines', async (req, res) => {
+  const includeConsumed = req.query.consumed === 'true'
   try {
     const wines = await prisma.storedWine.findMany({
+      where: includeConsumed ? undefined : { dateConsumed: null },
       include: {
         wineRef: {
           select: {
@@ -476,10 +478,43 @@ app.put('/stored-wines/:storedId', async (req, res) => {
   }
 });
 
+// PATCH consume a stored wine (marks as consumed with today's date)
+app.patch('/stored-wines/:storedId/consume', async (req, res) => {
+  const storedId = parseInt(req.params.storedId, 10)
+  if (!Number.isInteger(storedId) || storedId <= 0) {
+    return res.status(400).json({ error: 'invalid storedId' })
+  }
+  const { notes } = req.body ?? {}
+  const data = { dateConsumed: new Date() }
+  if (typeof notes === 'string' && notes.trim().length > 0) {
+    data.notes = notes.trim().slice(0, 255)
+  }
+  try {
+    const updated = await prisma.storedWine.update({
+      where: { storedId },
+      data,
+    })
+    res.json(updated)
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Stored wine not found' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // DELETE stored wine
 app.delete('/stored-wines/:storedId', async (req, res) => {
-  res.status(501).json({ error: 'Not implemented' });
-});
+  const storedId = parseInt(req.params.storedId, 10)
+  if (!Number.isInteger(storedId) || storedId <= 0) {
+    return res.status(400).json({ error: 'invalid storedId' })
+  }
+  try {
+    await prisma.storedWine.delete({ where: { storedId } })
+    res.json({ message: 'Stored wine deleted' })
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Stored wine not found' })
+    res.status(500).json({ error: err.message })
+  }
+})
 
 // ===== VINTAGE INFO ENDPOINTS =====
 

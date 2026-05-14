@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../utils/api'
+import CreateStorageForm from '../components/CreateStorageForm'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 const DARK = {
   page: 'bg-gradient-to-br from-slate-900 to-amber-950',
@@ -16,6 +19,7 @@ const DARK = {
   rowSub: 'text-slate-400',
   thead: 'text-slate-400 border-slate-700',
   badge: 'bg-slate-700 text-slate-300',
+  quantityBadge: 'bg-amber-900/70 text-amber-300 font-semibold',
   empty: 'text-slate-500',
   nav: 'text-amber-500 hover:text-amber-300',
   input: 'bg-slate-700 border border-slate-600 text-slate-100 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-600',
@@ -38,6 +42,7 @@ const LIGHT = {
   rowSub: 'text-slate-500',
   thead: 'text-slate-400 border-slate-200',
   badge: 'bg-slate-200 text-slate-500',
+  quantityBadge: 'bg-amber-100 text-amber-700 font-semibold',
   empty: 'text-slate-400',
   nav: 'text-amber-600 hover:text-amber-500',
   input: 'bg-slate-100 border border-slate-300 text-slate-700 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500',
@@ -122,7 +127,7 @@ function WineRow({ wine, isEditing, draft, storages, t, onStartEdit, onDraftChan
           <p className={`font-medium ${t.rowText}`}>
             {wine.wineRef?.displayName ?? '—'}
             {wine.quantity > 1 && (
-              <span className={`ml-2 text-xs font-normal px-1.5 py-0.5 rounded ${t.badge}`}>×{wine.quantity}</span>
+              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${t.quantityBadge}`}>×{wine.quantity}</span>
             )}
           </p>
           {wine.wineRef?.colour && (
@@ -164,7 +169,7 @@ function WineRow({ wine, isEditing, draft, storages, t, onStartEdit, onDraftChan
         <p className={`font-medium ${t.rowText}`}>
           {wine.wineRef?.displayName ?? '—'}
           {wine.quantity > 1 && (
-            <span className={`ml-2 text-xs font-normal px-1.5 py-0.5 rounded ${t.badge}`}>×{wine.quantity}</span>
+            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${t.quantityBadge}`}>×{wine.quantity}</span>
           )}
         </p>
         {wine.wineRef?.producerName && (
@@ -186,6 +191,7 @@ function WineRow({ wine, isEditing, draft, storages, t, onStartEdit, onDraftChan
 }
 
 export default function CellarPage() {
+  const { user } = useAuth()
   const [dark, setDark] = useState(true)
   const t = dark ? DARK : LIGHT
   const [wines, setWines] = useState([])
@@ -198,9 +204,10 @@ export default function CellarPage() {
   const [editError, setEditError] = useState(null)
 
   useEffect(() => {
+    if (!user) return
     Promise.all([
       apiFetch('/stored-wines').then(r => r.json()),
-      apiFetch('/storage').then(r => r.json()),
+      apiFetch(`/storage/${user.id}`).then(r => r.json()),
     ])
       .then(([wineData, storageData]) => {
         setWines(Array.isArray(wineData) ? wineData : [])
@@ -211,7 +218,7 @@ export default function CellarPage() {
         setError(err.message)
         setLoading(false)
       })
-  }, [])
+  }, [user])
 
   function handleSaved(updatedList) {
     const updatedMap = new Map(updatedList.map(w => [w.storedId, w]))
@@ -264,6 +271,10 @@ export default function CellarPage() {
     }
   }
 
+  const visibleWines = user
+    ? wines.filter(w => w.ownerId === user.id)
+    : wines
+
   return (
     <div className={`min-h-screen ${t.page} py-14 px-4 transition-colors duration-300`}>
       <button
@@ -283,21 +294,46 @@ export default function CellarPage() {
             Your Cellar
           </p>
           <div className={`mt-4 mx-auto w-16 border-t ${t.accentBar} transition-colors duration-300`} />
+          {!loading && !error && (
+            <p className={`mt-5 text-xl font-light tracking-widest ${t.title}`}>
+              {visibleWines.length}
+              <span className={`ml-2 text-sm tracking-widest uppercase ${t.subtitle}`}>
+                bottle{visibleWines.length !== 1 ? 's' : ''}
+              </span>
+            </p>
+          )}
         </div>
-        <div className="flex justify-end mb-6">
-          <Link to="/add" className={`text-sm tracking-widest uppercase transition-colors ${t.nav}`}>
-            + Add Wine
-          </Link>
+        <div className="flex justify-between items-center mb-6 gap-4">
+          <CreateStorageForm
+            t={t}
+            ownerId={user?.id}
+            onCreated={(newLoc) => setStorages(prev => [...prev, newLoc])}
+          />
+          <div className="flex items-center gap-6 shrink-0">
+            <Link to="/manage-storage" className={`text-sm tracking-widest uppercase transition-colors ${t.nav}`}>
+              Manage Storage
+            </Link>
+            <Link to="/add" className={`text-sm tracking-widest uppercase transition-colors ${t.nav}`}>
+              + Add Wine
+            </Link>
+            <button
+              type="button"
+              onClick={() => supabase.auth.signOut()}
+              className={`text-sm tracking-widest uppercase transition-colors ${t.empty} hover:opacity-100 opacity-60`}
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
         <div className={`${t.card} rounded-2xl shadow-2xl overflow-hidden transition-colors duration-300`}>
           {loading && <p className={`p-10 text-center text-sm tracking-widest uppercase ${t.empty}`}>Loading…</p>}
           {error && <p className="p-10 text-center text-sm text-red-400">{error}</p>}
-          {!loading && !error && wines.length === 0 && (
+          {!loading && !error && visibleWines.length === 0 && (
             <p className={`p-10 text-center text-sm tracking-widest uppercase ${t.empty}`}>
               No wines in your cellar yet. <Link to="/add" className={t.nav}>Add one →</Link>
             </p>
           )}
-          {!loading && !error && wines.length > 0 && (
+          {!loading && !error && visibleWines.length > 0 && (
             <>
             <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -312,7 +348,7 @@ export default function CellarPage() {
                 </tr>
               </thead>
               <tbody>
-                {groupWines(wines).map(group => (
+                {groupWines(visibleWines).map(group => (
                   <WineRow
                     key={group.storedId}
                     wine={group}
@@ -346,11 +382,6 @@ export default function CellarPage() {
             </>
           )}
         </div>
-        {!loading && !error && (
-          <p className={`mt-4 text-center text-xs tracking-widest uppercase ${t.empty}`}>
-            {wines.length} bottle{wines.length !== 1 ? 's' : ''}
-          </p>
-        )}
       </div>
     </div>
   )

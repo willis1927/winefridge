@@ -1,13 +1,15 @@
 import { useState, useRef, useCallback, useEffect, createContext, useContext } from 'react'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../utils/api'
+import CreateStorageForm from '../components/CreateStorageForm'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Dessert', 'Fortified']
 
 const initialForm = () => ({
   lwin: '',
   wineName: '',
-  owner: '',
   region: '',
   subRegion: '',
   country: '',
@@ -57,6 +59,8 @@ const DARK = {
   accentBar: 'border-amber-700',
   toggleBtn: 'bg-slate-700 border border-slate-600 text-slate-300 hover:text-amber-400 hover:border-amber-600',
   submitShadow: 'shadow-amber-900/40',
+  btnSave: 'bg-amber-700 hover:bg-amber-600 text-white text-xs px-3 py-1.5 rounded transition-colors',
+  btnCancel: 'bg-slate-600 hover:bg-slate-500 text-slate-300 text-xs px-3 py-1.5 rounded transition-colors',
 }
 
 const LIGHT = {
@@ -77,27 +81,26 @@ const LIGHT = {
   accentBar: 'border-amber-500',
   toggleBtn: 'bg-slate-50 border border-slate-300 text-slate-500 hover:text-amber-600 hover:border-amber-400',
   submitShadow: 'shadow-amber-600/20',
+  btnSave: 'bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded transition-colors',
+  btnCancel: 'bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs px-3 py-1.5 rounded transition-colors',
 }
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 function AddWinePage() {
+  const { user } = useAuth()
   const [dark, setDark] = useState(true)
   const t = dark ? DARK : LIGHT
 
   const [storageLocations, setStorageLocations] = useState([])
-  const [users, setUsers] = useState([])
 
   useEffect(() => {
-    apiFetch('/storage')
+    if (!user) return
+    apiFetch(`/storage/${user.id}`)
       .then((res) => res.json())
       .then((data) => setStorageLocations(data))
       .catch((err) => console.error('Storage fetch error:', err))
-    apiFetch('/users')
-      .then((res) => res.json())
-      .then((data) => setUsers(data))
-      .catch((err) => console.error('Users fetch error:', err))
-  }, [])
+  }, [user])
 
   const [submitting, setSubmitting] = useState(false)
   const [submitMsg, setSubmitMsg] = useState(null)
@@ -129,10 +132,6 @@ function AddWinePage() {
 
     if (!form.wineName.trim()) {
       setSubmitMsg({ type: 'error', text: 'Wine name is required' })
-      return
-    }
-    if (!form.owner) {
-      setSubmitMsg({ type: 'error', text: 'Please select an owner' })
       return
     }
     const qty = parseInt(form.quantity, 10)
@@ -169,7 +168,7 @@ function AddWinePage() {
       const storeRes = await apiFetch('/stored-wines', {
         method: 'POST',
         body: JSON.stringify({
-          owner_id: form.owner,
+          owner_id: user.id,
           lwin: lwinCode,
           vintage: form.vintage || undefined,
           size: form.size || undefined,
@@ -214,7 +213,7 @@ function AddWinePage() {
       {/* Header */}
       <div className="mb-10 text-center">
         <h1 className={`text-4xl font-serif font-light tracking-widest ${t.title} uppercase transition-colors duration-300`}>
-          Wine Fridge
+          <Link to="/cellar" className="hover:opacity-70 transition-opacity">Wine Fridge</Link>
         </h1>
         <p className={`mt-2 text-sm tracking-widest ${t.subtitle} uppercase transition-colors duration-300`}>
           Add a bottle to your cellar
@@ -222,10 +221,17 @@ function AddWinePage() {
         <div className={`mt-4 mx-auto w-16 border-t ${t.accentBar} transition-colors duration-300`} />
       </div>
 
-      <div className="flex justify-end mb-6">
+      <div className="flex justify-between items-center mb-6">
         <Link to="/cellar" className={`text-sm tracking-widest uppercase transition-colors ${t.sectionHead} opacity-70 hover:opacity-100`}>
           ← My Cellar
         </Link>
+        <button
+          type="button"
+          onClick={() => supabase.auth.signOut()}
+          className={`text-sm tracking-widest uppercase transition-colors ${t.subtitle} opacity-60 hover:opacity-100`}
+        >
+          Sign Out
+        </button>
       </div>
 
           {/* Card */}
@@ -314,22 +320,20 @@ function AddWinePage() {
                     <option value="">Select location…</option>
                     {storageLocations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
                   </select>
+                  <CreateStorageForm
+                    t={t}
+                    ownerId={user?.id}
+                    onCreated={(newLoc) => {
+                      setStorageLocations(prev => [...prev, newLoc])
+                      setForm(prev => ({ ...prev, storageLocation: String(newLoc.id) }))
+                    }}
+                  />
                 </div>
 
                 <Field label="Purchased From" name="purchasedFrom" value={form.purchasedFrom} onChange={handleChange} placeholder="e.g. Berry Bros. & Rudd" />
                 <Field label="Purchase Date" name="purchasedDate" value={form.purchasedDate} onChange={handleChange} type="date" />
                 <Field label="Stored Date" name="storedDate" value={form.storedDate} onChange={handleChange} type="date" />
 
-                {/* TODO: remove when auth is implemented */}
-                <div className="flex flex-col gap-1">
-                  <label className={`text-xs tracking-widest ${t.label} uppercase transition-colors duration-300`}>
-                    Owner <span className="text-amber-700">(temp)</span>
-                  </label>
-                  <select name="owner" value={form.owner} onChange={handleChange} className={selectClass}>
-                    <option value="">Select owner…</option>
-                    {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
-                  </select>
-                </div>
               </div>
             </section>
 
