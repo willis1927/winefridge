@@ -553,17 +553,18 @@ app.get('/cron/monthly-digest', async (req, res) => {
   const fromAddress = process.env.RESEND_FROM_EMAIL || 'WineFridge <noreply@yourdomain.com>';
   const today = new Date();
 
-  
+
   try {
+    const testMode = req.query.test === '1';
     const usersWithWines = await prisma.user.findMany({
       include: {
         storedWines: {
-          where: {
-            dateConsumed: null,
-            vintageInfo: {
-              drinkByDate: { gte: today }
-            }
-          },
+          where: testMode
+            ? { dateConsumed: null }
+            : {
+                dateConsumed: null,
+                vintageInfo: { drinkByDate: { gte: today } }
+              },
           include: {
             wineRef: { select: { displayName: true, region: true, country: true, colour: true } },
             vintageInfo: { select: { drinkByDate: true, currentDrinkState: true } }
