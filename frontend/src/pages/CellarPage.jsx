@@ -203,7 +203,7 @@ export default function CellarPage() {
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState(null)
 
-  useEffect(() => {
+  function fetchData() {
     if (!user) return
     Promise.all([
       apiFetch('/stored-wines').then(r => r.json()),
@@ -218,6 +218,18 @@ export default function CellarPage() {
         setError(err.message)
         setLoading(false)
       })
+  }
+
+  useEffect(() => {
+    if (!user) return
+    fetchData()
+
+    const channel = supabase
+      .channel('stored_wines_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stored_wines' }, fetchData)
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }, [user])
 
   function handleSaved(updatedList) {
