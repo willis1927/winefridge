@@ -560,7 +560,7 @@ app.get('/cron/monthly-digest', async (req, res) => {
       include: {
         storedWines: {
           where: testMode
-            ? { dateConsumed: null }
+            ? {}
             : {
                 dateConsumed: null,
                 vintageInfo: { drinkByDate: { gte: today } }
