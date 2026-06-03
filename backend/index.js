@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const { Pool } = require("pg");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
+const { Resend } = require('resend');
 
 const {createClient} = require('@supabase/supabase-js');
 const express = require('express');
@@ -536,6 +537,97 @@ app.put('/vintage-info/:fullLwin', async (req, res) => {
 // DELETE vintage info
 app.delete('/vintage-info/:fullLwin', async (req, res) => {
   res.status(501).json({ error: 'Not implemented' });
+});
+
+// ===== CRON ENDPOINTS =====
+
+// POST /cron/monthly-digest — called by Vercel Cron on the 1st of each month
+// Protected by CRON_SECRET environment variable
+app.get('/cron/monthly-digest', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const fromAddress = process.env.RESEND_FROM_EMAIL || 'WineFridge <noreply@yourdomain.com>';
+  const today = new Date();
+
+  
+  try {
+    const usersWithWines = await prisma.user.findMany({
+      include: {
+        storedWines: {
+          where: {
+            dateConsumed: null,
+            vintageInfo: {
+              drinkByDate: { gte: today }
+            }
+          },
+          include: {
+            wineRef: { select: { displayName: true, region: true, country: true, colour: true } },
+            vintageInfo: { select: { drinkByDate: true, currentDrinkState: true } }
+          }
+        }
+      }
+    });
+
+    const results = [];
+    for (const user of usersWithWines) {
+      if (!user.storedWines.length) continue;
+
+      const rows = user.storedWines
+        .sort((a, b) => {
+          const da = a.vintageInfo?.drinkByDate ? new Date(a.vintageInfo.drinkByDate) : Infinity;
+          const db = b.vintageInfo?.drinkByDate ? new Date(b.vintageInfo.drinkByDate) : Infinity;
+          return da - db;
+        })
+        .map(w => `
+          <tr>
+            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${w.wineRef.displayName ?? '—'}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${w.vintage ?? 'NV'}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${w.wineRef.region ?? '—'}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${w.vintageInfo?.currentDrinkState ?? '—'}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${w.vintageInfo?.drinkByDate ? new Date(w.vintageInfo.drinkByDate).getFullYear() : '—'}</td>
+          </tr>`)
+        .join('');
+
+      const month = today.toLocaleString('default', { month: 'long', year: 'numeric' });
+      const html = `
+        <div style="font-family:sans-serif;max-width:640px;margin:0 auto;color:#1e293b;">
+          <h2 style="color:#b45309;">Your Wine Cellar — ${month}</h2>
+          <p>Here are your wines currently in their drinking window:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <thead>
+              <tr style="background:#fef3c7;text-align:left;">
+                <th style="padding:8px 12px;">Wine</th>
+                <th style="padding:8px 12px;">Vintage</th>
+                <th style="padding:8px 12px;">Region</th>
+                <th style="padding:8px 12px;">State</th>
+                <th style="padding:8px 12px;">Drink by</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p style="margin-top:24px;color:#64748b;font-size:12px;">
+            You're receiving this because you have a WineFridge account.
+          </p>
+        </div>`;
+
+      const { error } = await resend.emails.send({
+        from: fromAddress,
+        to: user.email,
+        subject: `Your wines in drinking window — ${month}`,
+        html
+      });
+
+      results.push({ email: user.email, wineCount: user.storedWines.length, error: error?.message ?? null });
+    }
+
+    res.json({ sent: results.filter(r => !r.error).length, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 if (require.main === module) {
