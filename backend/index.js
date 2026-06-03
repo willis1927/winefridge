@@ -574,6 +574,10 @@ app.get('/cron/monthly-digest', async (req, res) => {
     });
 
     const results = [];
+    const debug = {
+      totalUsers: usersWithWines.length,
+      usersWithWines: usersWithWines.map(u => ({ email: u.email, wineCount: u.storedWines.length }))
+    };
     for (const user of usersWithWines) {
       if (!user.storedWines.length) continue;
 
@@ -625,7 +629,7 @@ app.get('/cron/monthly-digest', async (req, res) => {
       results.push({ email: user.email, wineCount: user.storedWines.length, error: error?.message ?? null });
     }
 
-    res.json({ sent: results.filter(r => !r.error).length, results });
+    res.json({ sent: results.filter(r => !r.error).length, results, debug });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
