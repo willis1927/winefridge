@@ -560,10 +560,7 @@ app.get('/cron/monthly-digest', async (req, res) => {
     const wines = await prisma.storedWine.findMany({
       where: testMode
         ? {}
-        : {
-            dateConsumed: null,
-            vintageInfo: { drinkByDate: { gte: today } }
-          },
+        : { dateConsumed: null },
       include: {
         wineRef: { select: { displayName: true, region: true, country: true, colour: true } },
         vintageInfo: { select: { drinkByDate: true, currentDrinkState: true } },
