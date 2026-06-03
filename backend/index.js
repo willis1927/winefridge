@@ -556,32 +556,38 @@ app.get('/cron/monthly-digest', async (req, res) => {
 
   try {
     const testMode = req.query.test === '1';
-    const usersWithWines = await prisma.user.findMany({
+
+    const wines = await prisma.storedWine.findMany({
+      where: testMode
+        ? {}
+        : {
+            dateConsumed: null,
+            vintageInfo: { drinkByDate: { gte: today } }
+          },
       include: {
-        storedWines: {
-          where: testMode
-            ? {}
-            : {
-                dateConsumed: null,
-                vintageInfo: { drinkByDate: { gte: today } }
-              },
-          include: {
-            wineRef: { select: { displayName: true, region: true, country: true, colour: true } },
-            vintageInfo: { select: { drinkByDate: true, currentDrinkState: true } }
-          }
-        }
+        wineRef: { select: { displayName: true, region: true, country: true, colour: true } },
+        vintageInfo: { select: { drinkByDate: true, currentDrinkState: true } },
+        owner: { select: { email: true } }
       }
     });
 
-    const results = [];
-    const debug = {
-      totalUsers: usersWithWines.length,
-      usersWithWines: usersWithWines.map(u => ({ email: u.email, wineCount: u.storedWines.length }))
-    };
-    for (const user of usersWithWines) {
-      if (!user.storedWines.length) continue;
+    // Group wines by user email
+    const byUser = new Map();
+    for (const wine of wines) {
+      const email = wine.owner?.email;
+      if (!email) continue;
+      if (!byUser.has(email)) byUser.set(email, []);
+      byUser.get(email).push(wine);
+    }
 
-      const rows = user.storedWines
+    const debug = {
+      totalWines: wines.length,
+      usersWithWines: [...byUser.entries()].map(([email, w]) => ({ email, wineCount: w.length }))
+    };
+
+    const results = [];
+    for (const [email, userWines] of byUser) {
+      const rows = userWines
         .sort((a, b) => {
           const da = a.vintageInfo?.drinkByDate ? new Date(a.vintageInfo.drinkByDate) : Infinity;
           const db = b.vintageInfo?.drinkByDate ? new Date(b.vintageInfo.drinkByDate) : Infinity;
@@ -621,12 +627,12 @@ app.get('/cron/monthly-digest', async (req, res) => {
 
       const { error } = await resend.emails.send({
         from: fromAddress,
-        to: user.email,
+        to: email,
         subject: `Your wines in drinking window — ${month}`,
         html
       });
 
-      results.push({ email: user.email, wineCount: user.storedWines.length, error: error?.message ?? null });
+      results.push({ email, wineCount: userWines.length, error: error?.message ?? null });
     }
 
     res.json({ sent: results.filter(r => !r.error).length, results, debug });
